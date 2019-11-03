@@ -7,10 +7,16 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"time"
 )
 
+const Period = 25 // work or rest period in minuts
+const Break = 5   // after period break time in minuts
+
 type Workoverlord struct {
-	TIMER           int
+	TIMER           int //start timer timestamp
+	PAUSE           int //turn pause timestamp
+	TIMERMODE       int //current timer mode 1-work mode 2-restmode
 	LVL             int
 	EXP             int
 	NEXP            int
@@ -80,18 +86,75 @@ func (w *Workoverlord) Read() {
 	}
 }
 
+func (w *Workoverlord) ShowHelp() {
+	fmt.Println("")
+	fmt.Println("Workoverlord - time and effectivity tracker app with gamification")
+	fmt.Println("")
+	fmt.Println("use:")
+	fmt.Println("  workoverlord [command]")
+	fmt.Println("------------")
+	fmt.Println("commands:")
+	fmt.Println("  status - return inline status")
+	fmt.Println("  work   - start timer for work process (reduce duty points)")
+	fmt.Println("  rest   - start timer for rest activity (require action points)")
+}
+
+func (w *Workoverlord) GetStatus() {
+	t := "done"
+	if w.TIMERMODE == 1 {
+		t = "W|"
+	} else if w.TIMERMODE == 2 {
+		t = "R|"
+	}
+	res := fmt.Sprintf("%d %s%s %d", w.DP, t, w.GetTime(), w.AP)
+	os.Stdout.Write([]byte(res))
+}
+
+func (w *Workoverlord) GetTime() string {
+	now := time.Now().Unix()
+	periodseconds := Period * 60
+	periodend := w.TIMER + periodseconds
+	delta := int(now) - periodend
+	return secondsToMinutes(delta)
+}
+
+func (w *Workoverlord) StartWorkTimer() {
+	now := time.Now().Unix()
+	w.TIMER = int(now)
+	w.TIMERMODE = 1
+	w.Write()
+}
+
+func (w *Workoverlord) StartRestTimer() {
+	now := time.Now().Unix()
+	w.TIMER = int(now)
+	w.TIMERMODE = 2
+	w.Write()
+}
+
+func secondsToMinutes(inSeconds int) string {
+	minutes := -1 * inSeconds / 60
+	seconds := -1 * inSeconds % 60
+	str := fmt.Sprintf("%d:%d", minutes, seconds)
+	return str
+}
+
 func main() {
 	App := Workoverlord{}
 	App.Init()
-	//App.Write()
 	App.Read()
+	defer App.Userfile.Close()
+	defer App.Userlog.Close()
 
-	fmt.Println(App.AP)
-	fmt.Println(App.DP)
-
-	App.DP = 2
-	App.Write()
-
-	App.Userfile.Close()
-	App.Userlog.Close()
+	if len(os.Args) > 1 {
+		if os.Args[1] == "status" {
+			App.GetStatus()
+		} else if os.Args[1] == "work" {
+			App.StartWorkTimer()
+		} else if os.Args[1] == "rest" {
+			App.StartRestTimer()
+		}
+	} else {
+		App.ShowHelp()
+	}
 }
