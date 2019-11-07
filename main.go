@@ -27,6 +27,7 @@ type Workoverlord struct {
 	NAP             int
 	NT              int
 	NG              int
+	DAYSTART        int
 	Userfile        *os.File `json:"-"`
 	Userlog         *os.File `json:"-"`
 	Userfilepath    string   `json:"-"`
@@ -101,21 +102,35 @@ func (w *Workoverlord) ShowHelp() {
 
 func (w *Workoverlord) GetStatus() {
 	t := "done"
+
+	if w.DAYSTART == 0 || int64(w.DAYSTART+60*60*24) < time.Now().Unix() {
+		w.DAYSTART = int(time.Now().Unix())
+		w.DP = w.DP - 6
+	}
+
 	if w.TIMERMODE == 1 {
 		t = "W|"
 	} else if w.TIMERMODE == 2 {
 		t = "R|"
 	}
+
 	res := fmt.Sprintf("%d %s%s %d", w.DP, t, w.GetTime(), w.AP)
 	os.Stdout.Write([]byte(res))
 }
 
 func (w *Workoverlord) GetTime() string {
+	var res string
 	now := time.Now().Unix()
 	periodseconds := Period * 60
 	periodend := w.TIMER + periodseconds
 	delta := int(now) - periodend
-	return secondsToMinutes(delta)
+	if delta < 0 {
+		res = secondsToMinutes(delta)
+	} else {
+		w.DonePeriod()
+		res = "DONE"
+	}
+	return res
 }
 
 func (w *Workoverlord) StartWorkTimer() {
@@ -130,6 +145,17 @@ func (w *Workoverlord) StartRestTimer() {
 	w.TIMER = int(now)
 	w.TIMERMODE = 2
 	w.Write()
+}
+
+func (w *Workoverlord) DonePeriod() {
+	if w.TIMERMODE == 1 {
+		w.DP++
+		if w.DP > 0 {
+			w.AP++
+		}
+	} else if w.TIMERMODE == 2 {
+		w.AP--
+	}
 }
 
 func secondsToMinutes(inSeconds int) string {
