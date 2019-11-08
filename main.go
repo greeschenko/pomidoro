@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
-const Period = 25 // work or rest period in minuts
-const Break = 5   // after period break time in minuts
+const Period = 2 // work or rest period in minuts
+const Break = 5  // after period break time in minuts
+
+var Needwrite int = 0
 
 type Workoverlord struct {
 	TIMER           int //start timer timestamp
@@ -62,7 +64,7 @@ func (w *Workoverlord) Init() {
 	}
 
 	if fi.Size() < 5 {
-		w.Write()
+		Needwrite = 1
 	}
 }
 
@@ -72,11 +74,11 @@ func (w *Workoverlord) Write() {
 		fmt.Println("error1:", err)
 	}
 
-	if _, err := w.Userfile.WriteAt(j, 0); err != nil {
+	w.Userfile.Truncate(0)
+
+	if _, err := w.Userfile.Write(j); err != nil {
 		fmt.Println("error2:", err)
 	}
-
-	os.Stdout.Write(j)
 }
 
 func (w *Workoverlord) Read() {
@@ -101,11 +103,12 @@ func (w *Workoverlord) ShowHelp() {
 }
 
 func (w *Workoverlord) GetStatus() {
-	t := "done"
+	t := ""
 
 	if w.DAYSTART == 0 || int64(w.DAYSTART+60*60*24) < time.Now().Unix() {
 		w.DAYSTART = int(time.Now().Unix())
 		w.DP = w.DP - 6
+		Needwrite = 1
 	}
 
 	if w.TIMERMODE == 1 {
@@ -137,14 +140,14 @@ func (w *Workoverlord) StartWorkTimer() {
 	now := time.Now().Unix()
 	w.TIMER = int(now)
 	w.TIMERMODE = 1
-	w.Write()
+	Needwrite = 1
 }
 
 func (w *Workoverlord) StartRestTimer() {
 	now := time.Now().Unix()
 	w.TIMER = int(now)
 	w.TIMERMODE = 2
-	w.Write()
+	Needwrite = 1
 }
 
 func (w *Workoverlord) DonePeriod() {
@@ -153,8 +156,12 @@ func (w *Workoverlord) DonePeriod() {
 		if w.DP > 0 {
 			w.AP++
 		}
+		w.TIMERMODE = 0
+		Needwrite = 1
 	} else if w.TIMERMODE == 2 {
 		w.AP--
+		w.TIMERMODE = 0
+		Needwrite = 1
 	}
 }
 
@@ -182,5 +189,9 @@ func main() {
 		}
 	} else {
 		App.ShowHelp()
+	}
+
+	if Needwrite == 1 {
+		App.Write()
 	}
 }
