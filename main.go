@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-const Period = 2 // work or rest period in minuts
-const Break = 5  // after period break time in minuts
+const Period = 25 // work or rest period in minuts
+const Break = 5   // after period break time in minuts
 
 var Needwrite int = 0
 
@@ -127,7 +127,9 @@ func (w *Workoverlord) GetTime() string {
 	periodseconds := Period * 60
 	periodend := w.TIMER + periodseconds
 	delta := int(now) - periodend
-	if delta < 0 {
+	if w.PAUSE != 0 {
+		res = "PAUSE"
+	} else if delta < 0 {
 		res = secondsToMinutes(delta)
 	} else {
 		w.DonePeriod()
@@ -165,10 +167,35 @@ func (w *Workoverlord) DonePeriod() {
 	}
 }
 
+func (w *Workoverlord) TogglePause() {
+	if w.PAUSE != 0 {
+		w.TIMER = int(time.Now().Unix()) - (w.PAUSE - w.TIMER)
+		w.PAUSE = 0
+		Needwrite = 1
+	} else if w.GetTime() != "DONE" {
+		w.PAUSE = int(time.Now().Unix())
+		Needwrite = 1
+	} else {
+		fmt.Println("You can not turn on pause now")
+	}
+}
+
 func secondsToMinutes(inSeconds int) string {
+	var resminutes string
+	var resseconds string
 	minutes := -1 * inSeconds / 60
 	seconds := -1 * inSeconds % 60
-	str := fmt.Sprintf("%d:%d", minutes, seconds)
+	if minutes < 10 {
+		resminutes = fmt.Sprintf("0%d", minutes)
+	} else {
+		resminutes = fmt.Sprintf("%d", minutes)
+	}
+	if seconds < 10 {
+		resseconds = fmt.Sprintf("0%d", seconds)
+	} else {
+		resseconds = fmt.Sprintf("%d", seconds)
+	}
+	str := fmt.Sprintf("%s:%s", resminutes, resseconds)
 	return str
 }
 
@@ -186,6 +213,8 @@ func main() {
 			App.StartWorkTimer()
 		} else if os.Args[1] == "rest" {
 			App.StartRestTimer()
+		} else if os.Args[1] == "pause" {
+			App.TogglePause()
 		}
 	} else {
 		App.ShowHelp()
