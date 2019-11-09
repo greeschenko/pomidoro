@@ -105,7 +105,13 @@ func (w *Workoverlord) ShowHelp() {
 func (w *Workoverlord) GetStatus() {
 	t := ""
 
-	if w.DAYSTART == 0 || int64(w.DAYSTART+60*60*24) < time.Now().Unix() {
+	curtime := time.Now()
+	daystart := time.Unix(int64(w.DAYSTART), 0)
+	delta := 24 * time.Hour
+	today := curtime.Truncate(delta).Unix()
+	yesterday := daystart.Truncate(delta).Unix()
+
+	if w.DAYSTART == 0 || today != yesterday {
 		w.DAYSTART = int(time.Now().Unix())
 		w.DP = w.DP - 6
 		Needwrite = 1
