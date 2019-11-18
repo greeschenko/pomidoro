@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"time"
 )
@@ -100,11 +101,11 @@ func (w *Workoverlord) ShowHelp() {
 	fmt.Println("  status - return inline status")
 	fmt.Println("  work   - start timer for work process (reduce duty points)")
 	fmt.Println("  rest   - start timer for rest activity (require action points)")
+	fmt.Println("  pause  - turn on/turn off timer pause")
 }
 
 func (w *Workoverlord) GetStatus() {
 	t := ""
-
 	curtime := time.Now()
 	daystart := time.Unix(int64(w.DAYSTART), 0)
 	delta := 24 * time.Hour
@@ -113,7 +114,7 @@ func (w *Workoverlord) GetStatus() {
 
 	if w.DAYSTART == 0 || today != yesterday {
 		w.DAYSTART = int(time.Now().Unix())
-		w.DP = w.DP - 6
+		w.DP = w.DP - 12
 		Needwrite = 1
 	}
 
@@ -124,7 +125,9 @@ func (w *Workoverlord) GetStatus() {
 	}
 
 	res := fmt.Sprintf("%d %s%s %d", w.DP, t, w.GetTime(), w.AP)
-	os.Stdout.Write([]byte(res))
+
+	fmt.Print(res)
+	//os.Stdout.Write([]byte(res))
 }
 
 func (w *Workoverlord) GetTime() string {
@@ -137,6 +140,15 @@ func (w *Workoverlord) GetTime() string {
 		res = "PAUSE"
 	} else if delta < 0 {
 		res = secondsToMinutes(delta)
+		for i := 5; i < Period; i = i + 5 {
+			if delta == -1*i*60 {
+				d := i
+				s := fmt.Sprintf("%d minutes remaining", d)
+				sendNotif(s, "critical", "")
+			}
+		}
+	} else if delta > 0 && delta < 5*60 {
+		res = "BREAK"
 	} else {
 		w.DonePeriod()
 		res = "DONE"
@@ -149,6 +161,7 @@ func (w *Workoverlord) StartWorkTimer() {
 	w.TIMER = int(now)
 	w.TIMERMODE = 1
 	Needwrite = 1
+	sendNotif("Starting work period", "critical", "")
 }
 
 func (w *Workoverlord) StartRestTimer() {
@@ -156,6 +169,7 @@ func (w *Workoverlord) StartRestTimer() {
 	w.TIMER = int(now)
 	w.TIMERMODE = 2
 	Needwrite = 1
+	sendNotif("Starting rest period", "low", "")
 }
 
 func (w *Workoverlord) DonePeriod() {
@@ -166,10 +180,14 @@ func (w *Workoverlord) DonePeriod() {
 		}
 		w.TIMERMODE = 0
 		Needwrite = 1
+		sendNotif("You complete work period!", "critical", "+1 DP +1 AP")
+		//sendNotif("Take a break!!!", "normal", "You should do nothing for 5 minutes")
 	} else if w.TIMERMODE == 2 {
 		w.AP--
 		w.TIMERMODE = 0
 		Needwrite = 1
+		sendNotif("You complete rest period!", "critical", "-1 AP")
+		//sendNotif("Take a break!!!", "normal", "You should do nothing for 5 minutes")
 	}
 }
 
@@ -178,11 +196,14 @@ func (w *Workoverlord) TogglePause() {
 		w.TIMER = int(time.Now().Unix()) - (w.PAUSE - w.TIMER)
 		w.PAUSE = 0
 		Needwrite = 1
+		sendNotif("Pause turn OFF!", "critical", "")
 	} else if w.GetTime() != "DONE" {
 		w.PAUSE = int(time.Now().Unix())
 		Needwrite = 1
+		sendNotif("Pause turn ON!", "low", "")
 	} else {
 		fmt.Println("You can not turn on pause now")
+		sendNotif("You can not turn on pause now!!!", "critical", "")
 	}
 }
 
@@ -203,6 +224,16 @@ func secondsToMinutes(inSeconds int) string {
 	}
 	str := fmt.Sprintf("%s:%s", resminutes, resseconds)
 	return str
+}
+
+func sendNotif(s string, u string, t string) {
+	cmd := exec.Command("/usr/bin/notify-send", "-t", "5000", "-u", u, s, t)
+	cmd.Run()
+	//err := cmd.Run()
+	//if err != nil {
+	////log.Fatal(err)
+	//fmt.Println(err)
+	//}
 }
 
 func main() {
